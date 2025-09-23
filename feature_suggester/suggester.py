@@ -65,7 +65,13 @@ class FeatureSuggester:
             # External search-based suggestions (may fail without tokens)
             try:
                 search_based = await self._generate_search_based_suggestions(project_info)
-                suggestions.extend(search_based)
+                if search_based:  # Only add if we got actual suggestions
+                    suggestions.extend(search_based)
+                else:
+                    # If search didn't return suggestions, add fallback
+                    self.logger.info("No search-based suggestions found, using fallback")
+                    fallback_suggestions = self._get_fallback_suggestions(project_info)
+                    suggestions.extend(fallback_suggestions)
             except Exception as search_error:
                 self.logger.warning(f"External search unavailable: {search_error}")
                 # Add fallback generic suggestions
@@ -695,6 +701,30 @@ class FeatureSuggester:
                 'steps': ['Create error classes', 'Add error handlers', 'Implement recovery'],
                 'files': ['errors.py'],
                 'deps': []
+            },
+            {
+                'name': 'Input Validation',
+                'description': 'Comprehensive input validation and sanitization system',
+                'category': 'security',
+                'steps': ['Add validation library', 'Create validation schemas', 'Implement sanitization'],
+                'files': ['validation.py'],
+                'deps': ['pydantic']
+            },
+            {
+                'name': 'Authentication System',
+                'description': 'User authentication with secure password handling',
+                'category': 'security',
+                'steps': ['Set up auth framework', 'Add password hashing', 'Implement sessions'],
+                'files': ['auth.py', 'models/user.py'],
+                'deps': ['bcrypt', 'jwt']
+            },
+            {
+                'name': 'API Rate Limiting',
+                'description': 'Protect APIs from abuse with rate limiting',
+                'category': 'security',
+                'steps': ['Install rate limiter', 'Configure limits', 'Add monitoring'],
+                'files': ['middleware/rate_limit.py'],
+                'deps': ['slowapi']
             }
         ]
         
