@@ -28,6 +28,16 @@ class Config:
     feedback_storage_path: str = "./data/feedback.json"
     model_weights_path: str = "./data/model_weights.pkl"
     
+    # External search settings
+    serp_api_key: Optional[str] = None
+    
+    # Persona settings
+    default_persona: str = "senior_developer"
+    
+    # Feature suggestion settings  
+    enable_external_search: bool = True
+    max_search_results: int = 10
+    
     # Additional settings
     extra_settings: Dict[str, Any] = field(default_factory=dict)
     
@@ -45,6 +55,10 @@ class Config:
             learning_enabled=os.getenv('LEARNING_ENABLED', 'True').lower() == 'true',
             feedback_storage_path=os.getenv('FEEDBACK_STORAGE_PATH', './data/feedback.json'),
             model_weights_path=os.getenv('MODEL_WEIGHTS_PATH', './data/model_weights.pkl'),
+            serp_api_key=os.getenv('SERP_API_KEY'),
+            default_persona=os.getenv('DEFAULT_PERSONA', 'senior_developer'),
+            enable_external_search=os.getenv('ENABLE_EXTERNAL_SEARCH', 'True').lower() == 'true',
+            max_search_results=int(os.getenv('MAX_SEARCH_RESULTS', '10')),
         )
     
     def validate(self) -> None:

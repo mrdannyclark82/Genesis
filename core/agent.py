@@ -14,6 +14,9 @@ from core.config import Config
 from github_api.client import GitHubClient
 from code_analyzer.analyzer import CodeAnalyzer
 from self_improvement.learner import SelfLearner
+from feature_suggester.suggester import FeatureSuggester
+from external_search.search_client import ExternalSearchClient
+from personas.persona_manager import PersonaManager
 from utils.logger import get_logger
 
 
@@ -29,6 +32,9 @@ class GenesisAgent:
         self.github_client = GitHubClient(self.config)
         self.code_analyzer = CodeAnalyzer(self.config)
         self.self_learner = SelfLearner(self.config)
+        self.feature_suggester = FeatureSuggester(self.config)
+        self.search_client = ExternalSearchClient(self.config)
+        self.persona_manager = PersonaManager(self.config)
         
         self._active = True
         self._mode = "interactive"
@@ -132,10 +138,49 @@ class GenesisAgent:
             
             elif intent['action'] == 'explain':
                 explanation = await self._explain_code(intent.get('target'))
-                return explanation
+                response = explanation
+            
+            # NEW FEATURE HANDLERS
+            elif intent['action'] == 'suggest_features':
+                features = await self.suggest_new_features(intent.get('target', '.'))
+                response = f"Here are some new feature suggestions:\n" + '\n'.join(features)
+            
+            elif intent['action'] == 'search_external':
+                query = intent.get('query', '')
+                if not query:
+                    response = "Please specify what you'd like to search for."
+                else:
+                    examples = await self.search_external_examples(query)
+                    response = f"External search results for '{query}':\n" + '\n'.join(examples)
+            
+            elif intent['action'] == 'set_persona':
+                persona_name = intent.get('persona')
+                if not persona_name:
+                    response = "Please specify a persona name. Use 'list personas' to see available options."
+                else:
+                    response = await self.set_persona(persona_name)
+            
+            elif intent['action'] == 'list_personas':
+                personas = await self.get_available_personas()
+                response = "Available personas:\n" + '\n'.join(personas)
+            
+            elif intent['action'] == 'persona_status':
+                response = await self.get_persona_status()
+            
+            elif intent['action'] == 'suggest_category_features':
+                category = intent.get('category', 'general')
+                features = await self.suggest_features_by_category(category)
+                response = f"Here are {category} feature suggestions:\n" + '\n'.join(features)
             
             else:
-                return await self._generate_general_response(input_text)
+                response = await self._generate_general_response(input_text)
+            
+            # Apply persona formatting to the response
+            if self.persona_manager.get_current_persona():
+                context = intent['action'] if intent['action'] != 'general' else 'general'
+                response = self.persona_manager.format_response_with_persona(response, context)
+            
+            return response
                 
         except Exception as e:
             self.logger.error(f"Error processing natural language: {e}")
@@ -159,6 +204,108 @@ class GenesisAgent:
             await self.self_learner.learn_from_feedback(feedback)
         else:
             self.logger.info("Learning is disabled")
+    
+    async def suggest_new_features(self, project_path: str = ".") -> List[str]:
+        """Suggest new features and add-ons for the project."""
+        self.logger.info(f"Suggesting new features for project: {project_path}")
+        
+        try:
+            suggestions = await self.feature_suggester.suggest_features_for_project(project_path)
+            
+            # Format suggestions for display
+            formatted_suggestions = []
+            for suggestion in suggestions:
+                formatted = f"🚀 {suggestion.name} ({suggestion.category}): {suggestion.description}"
+                if suggestion.priority == "high":
+                    formatted = f"⭐ {formatted}"
+                formatted_suggestions.append(formatted)
+            
+            # Learn from the suggestions generated
+            if self.config.learning_enabled:
+                await self.self_learner.learn_from_suggestions([s.name for s in suggestions])
+            
+            return formatted_suggestions
+            
+        except Exception as e:
+            self.logger.error(f"Error suggesting new features: {e}")
+            return [f"Error suggesting features: {str(e)}"]
+    
+    async def search_external_examples(self, query: str, language: str = None) -> List[str]:
+        """Search external sources for code examples and implementations."""
+        self.logger.info(f"Searching external sources for: {query}")
+        
+        try:
+            async with self.search_client:
+                results = await self.search_client.comprehensive_search(query, language, 5)
+                
+                formatted_results = []
+                for source, search_results in results.items():
+                    if search_results:
+                        formatted_results.append(f"\n📂 {source.replace('_', ' ').title()}:")
+                        for result in search_results[:3]:  # Top 3 per source
+                            formatted_results.append(f"  • {result.title}: {result.snippet[:100]}...")
+                            formatted_results.append(f"    🔗 {result.url}")
+                
+                return formatted_results if formatted_results else ["No external examples found."]
+                
+        except Exception as e:
+            self.logger.error(f"Error searching external examples: {e}")
+            return [f"Error searching external sources: {str(e)}"]
+    
+    async def set_persona(self, persona_name: str) -> str:
+        """Set the AI agent's persona."""
+        self.logger.info(f"Setting persona to: {persona_name}")
+        
+        if self.persona_manager.set_persona(persona_name):
+            persona = self.persona_manager.get_current_persona()
+            return f"✅ Switched to {persona.name} persona: {persona.description}"
+        else:
+            available = ", ".join(self.persona_manager.get_available_personas())
+            return f"❌ Persona '{persona_name}' not found. Available: {available}"
+    
+    async def get_available_personas(self) -> List[str]:
+        """Get list of available personas."""
+        personas = self.persona_manager.get_available_personas()
+        formatted_personas = []
+        
+        for persona_name in personas:
+            persona_info = self.persona_manager.get_persona_info(persona_name)
+            if persona_info:
+                formatted_personas.append(
+                    f"👤 {persona_info['name']}: {persona_info['description']}"
+                )
+        
+        return formatted_personas
+    
+    async def get_persona_status(self) -> str:
+        """Get current persona status."""
+        current = self.persona_manager.get_current_persona()
+        if current:
+            expertise = ", ".join(current.expertise_areas[:3])
+            return (f"Current persona: {current.name}\n"
+                   f"Expertise: {expertise}\n"
+                   f"Style: {current.communication_style}")
+        return "No persona currently active"
+    
+    async def suggest_features_by_category(self, category: str, project_path: str = ".") -> List[str]:
+        """Suggest features for a specific category."""
+        self.logger.info(f"Suggesting {category} features")
+        
+        try:
+            suggestions = await self.feature_suggester.suggest_features_by_category(category, project_path)
+            
+            formatted_suggestions = []
+            for suggestion in suggestions:
+                formatted = f"🔧 {suggestion.name}: {suggestion.description}"
+                if suggestion.examples:
+                    formatted += f"\n   📚 Example: {suggestion.examples[0].url}"
+                formatted_suggestions.append(formatted)
+            
+            return formatted_suggestions if formatted_suggestions else [f"No {category} features suggested."]
+            
+        except Exception as e:
+            self.logger.error(f"Error suggesting {category} features: {e}")
+            return [f"Error suggesting {category} features: {str(e)}"]
     
     async def _parse_intent(self, input_text: str) -> Dict[str, Any]:
         """Parse intent from natural language input."""
@@ -189,6 +336,61 @@ class GenesisAgent:
         ]
         if any(pattern in input_lower for pattern in suggest_patterns):
             return {'action': 'suggest', 'target': self._extract_target(input_text)}
+        
+        # NEW FEATURE COMMANDS
+        
+        # Feature suggestion commands
+        feature_patterns = [
+            'suggest features', 'new features', 'add features', 'what features',
+            'feature suggestions', 'suggest new features', 'recommend features'
+        ]
+        if any(pattern in input_lower for pattern in feature_patterns):
+            return {'action': 'suggest_features', 'target': self._extract_target(input_text)}
+        
+        # External search commands
+        search_patterns = [
+            'search', 'find examples', 'look for', 'search for', 'find code',
+            'external examples', 'search github', 'search web'
+        ]
+        if any(pattern in input_lower for pattern in search_patterns):
+            query = input_text
+            # Remove the command part to get the query
+            for pattern in search_patterns:
+                if pattern in input_lower:
+                    query = input_text.lower().replace(pattern, '').strip()
+                    break
+            return {'action': 'search_external', 'query': query or input_text}
+        
+        # Persona commands
+        persona_patterns = [
+            'set persona', 'change persona', 'switch persona', 'persona',
+            'available personas', 'list personas', 'persona status'
+        ]
+        if any(pattern in input_lower for pattern in persona_patterns):
+            if 'available' in input_lower or 'list' in input_lower:
+                return {'action': 'list_personas'}
+            elif 'status' in input_lower:
+                return {'action': 'persona_status'}
+            else:
+                # Extract persona name
+                words = input_text.split()
+                persona_name = None
+                for i, word in enumerate(words):
+                    if word.lower() in ['persona', 'to']:
+                        if i + 1 < len(words):
+                            persona_name = words[i + 1]
+                            break
+                return {'action': 'set_persona', 'persona': persona_name}
+        
+        # Category-specific feature suggestions
+        category_patterns = [
+            'security features', 'performance features', 'ui features', 
+            'testing features', 'documentation features', 'database features'
+        ]
+        for pattern in category_patterns:
+            if pattern in input_lower:
+                category = pattern.split()[0]  # Extract category
+                return {'action': 'suggest_category_features', 'category': category}
         
         # Status/help commands
         status_patterns = ['status', 'how are you', 'what are you doing']

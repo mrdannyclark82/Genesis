@@ -20,14 +20,20 @@ class GitHubClient:
         """Initialize GitHub client."""
         self.config = config
         self.logger = get_logger(__name__)
+        self.user = None
         
         if not config.github_token:
             raise ValueError("GitHub token is required")
         
         self.github = Github(config.github_token)
-        self.user = self.github.get_user()
         
-        self.logger.info(f"GitHub client initialized for user: {self.user.login}")
+        # Try to get user info, but don't fail if token is invalid
+        try:
+            self.user = self.github.get_user()
+            self.logger.info(f"GitHub client initialized for user: {self.user.login}")
+        except Exception as e:
+            self.logger.warning(f"GitHub authentication failed, continuing with limited functionality")
+            self.logger.info("GitHub client initialized (authentication pending)")
     
     async def get_repository_info(self, repo_url: str) -> Dict[str, Any]:
         """Get comprehensive repository information."""
