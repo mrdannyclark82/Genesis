@@ -8,16 +8,18 @@ import os
 import sys
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import click
 from rich.console import Console
-from rich.prompt import Prompt
+from rich.prompt import Prompt, Confirm
+from rich.table import Table
 from dotenv import load_dotenv
 
 from core.agent import GenesisAgent
 from core.config import Config
 from utils.logger import setup_logger
+from features.installer import FeatureInstaller
 
 # Load environment variables
 load_dotenv()
@@ -208,6 +210,271 @@ def suggest_category_features(ctx, category, project_path):
         console.print(f"[red]Error: {e}[/red]")
 
 
+# Feature Installation Commands
+
+@cli.command('install-feature')
+@click.argument('feature_names', nargs=-1, required=True)
+@click.option('--auto-approve', is_flag=True, help='Auto-approve all changes without prompts')
+@click.option('--list-available', is_flag=True, help='List all available features')
+@click.option('--preview', is_flag=True, help='Preview the feature without installing')
+@click.option('--target-dir', default='.', help='Target directory for installation')
+@click.pass_context  
+def install_feature(ctx, feature_names, auto_approve, list_available, preview, target_dir):
+    """Install one or more features into your project."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        
+        if list_available:
+            available = installer.get_available_features()
+            if available:
+                console.print("\n[bold blue]📦 Available Features:[/bold blue]")
+                for feature_name in available:
+                    feature_info = installer.get_feature_info(feature_name)
+                    if feature_info:
+                        console.print(f"  [cyan]{feature_name}[/cyan] - {feature_info.description}")
+            else:
+                console.print("[yellow]No features available for installation[/yellow]")
+            return
+        
+        if not feature_names:
+            console.print("[red]Please specify feature name(s) to install[/red]")
+            return
+        
+        for feature_name in feature_names:
+            if preview:
+                installer.preview_feature(feature_name)
+            else:
+                console.print(f"\n[bold blue]Installing feature: {feature_name}[/bold blue]")
+                success = asyncio.run(installer.install_feature(
+                    feature_name, 
+                    auto_approve=auto_approve,
+                    target_dir=target_dir
+                ))
+                
+                if not success:
+                    console.print(f"[red]Failed to install {feature_name}[/red]")
+                    
+    except Exception as e:
+        logger.error(f"Error with feature installation: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('list-features')
+@click.option('--installed', is_flag=True, help='Show installed features')
+@click.pass_context
+def list_features(ctx, installed):
+    """List available or installed features."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        
+        if installed:
+            installations = installer.list_installations()
+            if installations:
+                console.print("\n[bold green]📦 Installed Features:[/bold green]")
+                
+                table = Table()
+                table.add_column("Feature", style="cyan")
+                table.add_column("Installed", style="green")
+                table.add_column("Status", style="yellow")
+                
+                for record in installations:
+                    status = "✅ Success" if record.success else "❌ Failed"
+                    table.add_row(record.feature_name, record.timestamp[:19], status)
+                
+                console.print(table)
+            else:
+                console.print("[yellow]No features installed yet[/yellow]")
+        else:
+            available = installer.get_available_features()
+            if available:
+                console.print("\n[bold blue]📦 Available Features:[/bold blue]")
+                for feature_name in available:
+                    feature_info = installer.get_feature_info(feature_name)
+                    if feature_info:
+                        console.print(f"  [cyan]{feature_name}[/cyan] - {feature_info.description}")
+                        console.print(f"    Category: {feature_info.category} | Version: {feature_info.version}")
+            else:
+                console.print("[yellow]No features available for installation[/yellow]")
+                
+    except Exception as e:
+        logger.error(f"Error listing features: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('preview-feature')
+@click.argument('feature_name')
+@click.pass_context
+def preview_feature(ctx, feature_name):
+    """Preview a feature before installation."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        installer.preview_feature(feature_name)
+        
+    except Exception as e:
+        logger.error(f"Error previewing feature: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('rollback-feature')
+@click.argument('feature_name')
+@click.pass_context
+def rollback_feature(ctx, feature_name):
+    """Rollback a previously installed feature."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        
+        console.print(f"[yellow]Rolling back feature: {feature_name}[/yellow]")
+        success = asyncio.run(installer.rollback_installation(feature_name))
+        
+        if success:
+            console.print(f"[green]✅ Successfully rolled back {feature_name}[/green]")
+        else:
+            console.print(f"[red]❌ Failed to rollback {feature_name}[/red]")
+            
+    except Exception as e:
+        logger.error(f"Error rolling back feature: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+# Enhanced Persona Management Commands
+
+@cli.command('create-persona')
+@click.option('--interactive', is_flag=True, help='Use guided creation process')
+@click.pass_context
+def create_persona(ctx, interactive):
+    """Create a new custom persona."""
+    try:
+        config = Config()
+        from personas.persona_manager import PersonaManager
+        persona_manager = PersonaManager(config)
+        
+        if interactive:
+            # Guided persona creation
+            console.print("\n[bold blue]🎭 Creating New Persona[/bold blue]")
+            
+            name = Prompt.ask("[cyan]Persona name[/cyan]")
+            description = Prompt.ask("[cyan]Description[/cyan]")
+            
+            console.print("\n[dim]Enter expertise areas (one per line, empty line to finish):[/dim]")
+            expertise_areas = []
+            while True:
+                area = input("  > ").strip()
+                if not area:
+                    break
+                expertise_areas.append(area)
+            
+            communication_style = Prompt.ask(
+                "[cyan]Communication style[/cyan]",
+                choices=["professional", "casual", "technical", "encouraging", "formal"],
+                default="professional"
+            )
+            
+            # Create the persona
+            persona_data = {
+                "name": name,
+                "description": description,
+                "expertise_areas": expertise_areas,
+                "communication_style": communication_style,
+                "custom": True
+            }
+            
+            success = persona_manager.create_custom_persona(name, persona_data)
+            if success:
+                console.print(f"[green]✅ Created persona: {name}[/green]")
+            else:
+                console.print(f"[red]❌ Failed to create persona[/red]")
+        else:
+            console.print("[yellow]Use --interactive for guided persona creation[/yellow]")
+            
+    except Exception as e:
+        logger.error(f"Error creating persona: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('export-persona')
+@click.argument('persona_name')
+@click.option('--output', '-o', help='Output file path')
+@click.pass_context
+def export_persona(ctx, persona_name, output):
+    """Export a persona to a file for sharing."""
+    try:
+        config = Config()
+        from personas.persona_manager import PersonaManager
+        persona_manager = PersonaManager(config)
+        
+        persona_info = persona_manager.get_persona_info(persona_name)
+        if not persona_info:
+            console.print(f"[red]Persona '{persona_name}' not found[/red]")
+            return
+        
+        import json
+        output_file = output or f"{persona_name.lower().replace(' ', '_')}_persona.json"
+        
+        with open(output_file, 'w') as f:
+            json.dump(persona_info, f, indent=2)
+        
+        console.print(f"[green]✅ Exported persona to: {output_file}[/green]")
+        
+    except Exception as e:
+        logger.error(f"Error exporting persona: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('import-persona')
+@click.argument('file_path', type=click.Path(exists=True))
+@click.pass_context
+def import_persona(ctx, file_path):
+    """Import a persona from a file."""
+    try:
+        config = Config()
+        from personas.persona_manager import PersonaManager
+        persona_manager = PersonaManager(config)
+        
+        import json
+        with open(file_path) as f:
+            persona_data = json.load(f)
+        
+        name = persona_data.get('name')
+        if not name:
+            console.print("[red]Invalid persona file: missing name[/red]")
+            return
+        
+        success = persona_manager.create_custom_persona(name, persona_data)
+        if success:
+            console.print(f"[green]✅ Imported persona: {name}[/green]")
+        else:
+            console.print(f"[red]❌ Failed to import persona[/red]")
+            
+    except Exception as e:
+        logger.error(f"Error importing persona: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command('serve')
+@click.option('--host', default='127.0.0.1', help='Host to bind to')
+@click.option('--port', default=5000, help='Port to listen on')
+@click.option('--debug', is_flag=True, help='Enable debug mode')
+@click.pass_context
+def serve(ctx, host, port, debug):
+    """Start the Genesis web API server."""
+    console.print(f"[bold blue]🌐 Starting Genesis Web API Server[/bold blue]")
+    console.print(f"Server will be available at: http://{host}:{port}")
+    console.print("Press Ctrl+C to stop the server")
+    
+    try:
+        from api.app import run_web_server
+        run_web_server(host=host, port=port, debug=debug)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except Exception as e:
+        logger.error(f"Error starting web server: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
 async def run_interactive_session(agent: GenesisAgent):
     """Run the interactive session with the AI agent."""
     commands = {
@@ -220,6 +487,9 @@ async def run_interactive_session(agent: GenesisAgent):
         'implement': 'Implement suggested changes',
         'status': 'Show agent status',
         'learn': 'Enter learning mode',
+        'install': 'Install available features',
+        'list-features': 'List available/installed features',
+        'serve': 'Start web API server',
         'quit': 'Exit the assistant'
     }
     
@@ -257,6 +527,12 @@ async def run_interactive_session(agent: GenesisAgent):
                 await handle_search_command(agent)
             elif command == 'persona':
                 await handle_persona_command(agent)
+            elif command == 'install':
+                await handle_install_command()
+            elif command == 'list-features':
+                await handle_list_features_command()
+            elif command == 'serve':
+                await handle_serve_command()
             else:
                 # Handle natural language input - check if it's an actionable command
                 await handle_natural_language_input(agent, user_input)
@@ -434,6 +710,94 @@ async def handle_persona_command(agent):
         if persona_name:
             result = await agent.set_persona(persona_name)
             console.print(result)
+
+
+async def handle_install_command():
+    """Handle the install command for features."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        
+        # Use interactive selection
+        feature_name = installer.interactive_feature_selection()
+        if not feature_name:
+            console.print("[yellow]Installation cancelled[/yellow]")
+            return
+        
+        # Preview before installation
+        installer.preview_feature(feature_name)
+        
+        if not Confirm.ask(f"\nInstall {feature_name}?", default=True):
+            console.print("[yellow]Installation cancelled[/yellow]")
+            return
+        
+        # Install the feature
+        success = await installer.install_feature(feature_name)
+        if success:
+            console.print(f"[green]✅ Successfully installed {feature_name}[/green]")
+        else:
+            console.print(f"[red]❌ Failed to install {feature_name}[/red]")
+                
+    except Exception as e:
+        logger.error(f"Error in install command: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+async def handle_list_features_command():
+    """Handle the list-features command."""
+    try:
+        config = Config()
+        installer = FeatureInstaller(config)
+        
+        action = Prompt.ask(
+            "[cyan]What would you like to list?[/cyan]",
+            choices=['available', 'installed'],
+            default='available'
+        )
+        
+        if action == 'available':
+            available = installer.get_available_features()
+            if available:
+                console.print("\n[bold blue]📦 Available Features:[/bold blue]")
+                for feature_name in available:
+                    feature_info = installer.get_feature_info(feature_name)
+                    if feature_info:
+                        console.print(f"  [cyan]{feature_name}[/cyan] - {feature_info.description}")
+                        console.print(f"    Category: {feature_info.category} | Version: {feature_info.version}")
+            else:
+                console.print("[yellow]No features available for installation[/yellow]")
+        
+        elif action == 'installed':
+            installations = installer.list_installations()
+            if installations:
+                console.print("\n[bold green]📦 Installed Features:[/bold green]")
+                
+                for record in installations:
+                    status = "✅ Success" if record.success else "❌ Failed"
+                    console.print(f"  {status} [cyan]{record.feature_name}[/cyan] - {record.timestamp[:19]}")
+            else:
+                console.print("[yellow]No features installed yet[/yellow]")
+                
+    except Exception as e:
+        logger.error(f"Error listing features: {e}")
+        console.print(f"[red]Error: {e}[/red]")
+
+
+async def handle_serve_command():
+    """Handle the serve command to start web API."""
+    try:
+        console.print("[bold blue]🌐 Starting Genesis Web API Server...[/bold blue]")
+        console.print("Server will be available at: http://127.0.0.1:5000")
+        console.print("[dim]Press Ctrl+C to return to interactive mode[/dim]")
+        
+        from api.app import run_web_server
+        run_web_server(host='127.0.0.1', port=5000, debug=False)
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Web server stopped, returning to interactive mode[/yellow]")
+    except Exception as e:
+        logger.error(f"Error starting web server: {e}")
+        console.print(f"[red]Error: {e}[/red]")
 
 
 if __name__ == '__main__':

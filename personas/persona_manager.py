@@ -37,6 +37,9 @@ class PersonaManager:
         # Load predefined personas
         self._load_predefined_personas()
         
+        # Load custom personas
+        self._load_custom_personas()
+        
         # Set default persona
         self.set_persona("senior_developer")
         
@@ -393,3 +396,134 @@ class PersonaManager:
             response = f"{prefix}{response}"
         
         return response
+    
+    def create_custom_persona(self, name: str, persona_data: Dict[str, Any]) -> bool:
+        """Create a new custom persona."""
+        try:
+            # Validate required fields
+            required_fields = ["name", "description", "expertise_areas", "communication_style"]
+            for field in required_fields:
+                if field not in persona_data:
+                    self.logger.error(f"Missing required field: {field}")
+                    return False
+            
+            # Set defaults for optional fields
+            defaults = {
+                "response_templates": {
+                    "general": "{response}",
+                    "analysis": "Analysis: {response}",
+                    "suggestion": "Suggestion: {response}"
+                },
+                "suggested_actions": ["Provide helpful guidance"],
+                "personality_traits": ["helpful", "knowledgeable"],
+                "preferred_technologies": [],
+                "focus_areas": persona_data.get("expertise_areas", []),
+                "example_responses": {
+                    "greeting": f"Hello! I'm {persona_data['name']}. {persona_data['description']}",
+                    "code_review": "I've reviewed your code and have some feedback..."
+                }
+            }
+            
+            # Merge with defaults
+            for key, default_value in defaults.items():
+                if key not in persona_data:
+                    persona_data[key] = default_value
+            
+            # Create persona object
+            persona = Persona(
+                name=persona_data["name"],
+                description=persona_data["description"],
+                expertise_areas=persona_data["expertise_areas"],
+                communication_style=persona_data["communication_style"],
+                response_templates=persona_data["response_templates"],
+                suggested_actions=persona_data["suggested_actions"],
+                personality_traits=persona_data["personality_traits"],
+                preferred_technologies=persona_data["preferred_technologies"],
+                focus_areas=persona_data["focus_areas"],
+                example_responses=persona_data["example_responses"]
+            )
+            
+            # Save to available personas
+            persona_key = name.lower().replace(" ", "_").replace("-", "_")
+            self.available_personas[persona_key] = persona
+            
+            # Save to file for persistence
+            self._save_custom_persona(persona_key, persona_data)
+            
+            self.logger.info(f"Created custom persona: {name}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error creating custom persona: {e}")
+            return False
+    
+    def _save_custom_persona(self, persona_key: str, persona_data: Dict[str, Any]) -> None:
+        """Save custom persona to file."""
+        try:
+            personas_dir = Path(__file__).parent / "custom"
+            personas_dir.mkdir(exist_ok=True)
+            
+            persona_file = personas_dir / f"{persona_key}.json"
+            with persona_file.open('w') as f:
+                json.dump(persona_data, f, indent=2)
+                
+        except Exception as e:
+            self.logger.error(f"Error saving custom persona: {e}")
+    
+    def _load_custom_personas(self) -> None:
+        """Load custom personas from files."""
+        try:
+            personas_dir = Path(__file__).parent / "custom"
+            if not personas_dir.exists():
+                return
+            
+            for persona_file in personas_dir.glob("*.json"):
+                try:
+                    with persona_file.open() as f:
+                        persona_data = json.load(f)
+                    
+                    persona_key = persona_file.stem
+                    persona = Persona(
+                        name=persona_data["name"],
+                        description=persona_data["description"],
+                        expertise_areas=persona_data["expertise_areas"],
+                        communication_style=persona_data["communication_style"],
+                        response_templates=persona_data["response_templates"],
+                        suggested_actions=persona_data["suggested_actions"],
+                        personality_traits=persona_data["personality_traits"],
+                        preferred_technologies=persona_data["preferred_technologies"],
+                        focus_areas=persona_data["focus_areas"],
+                        example_responses=persona_data["example_responses"]
+                    )
+                    
+                    self.available_personas[persona_key] = persona
+                    
+                except Exception as e:
+                    self.logger.error(f"Error loading custom persona {persona_file}: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error loading custom personas: {e}")
+    
+    def delete_custom_persona(self, persona_name: str) -> bool:
+        """Delete a custom persona."""
+        try:
+            persona_key = persona_name.lower().replace(" ", "_").replace("-", "_")
+            
+            if persona_key not in self.available_personas:
+                return False
+            
+            # Remove from memory
+            del self.available_personas[persona_key]
+            
+            # Remove file if it exists
+            personas_dir = Path(__file__).parent / "custom"
+            persona_file = personas_dir / f"{persona_key}.json"
+            if persona_file.exists():
+                persona_file.unlink()
+            
+            self.logger.info(f"Deleted custom persona: {persona_name}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error deleting custom persona: {e}")
+            return False

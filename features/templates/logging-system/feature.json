@@ -1,0 +1,19 @@
+{
+  "name": "Advanced Logging System",
+  "description": "Structured logging system with multiple handlers and log rotation",
+  "category": "monitoring",
+  "version": "1.0.0",
+  "requirements": [
+    "structlog>=23.1.0",
+    "python-json-logger>=2.0.0"
+  ],
+  "dependencies": [
+    "Log directory creation",
+    "Log rotation configuration"
+  ],
+  "post_install_steps": [
+    "Configure log levels in environment",
+    "Set up log rotation policy",
+    "Configure log aggregation if needed"
+  ]
+}

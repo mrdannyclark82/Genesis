@@ -1,0 +1,22 @@
+{
+  "name": "test_persona",
+  "description": "A test persona",
+  "expertise_areas": [
+    "testing"
+  ],
+  "communication_style": "casual",
+  "response_templates": {},
+  "suggested_actions": [
+    "test code"
+  ],
+  "personality_traits": [
+    "helpful"
+  ],
+  "preferred_technologies": [
+    "pytest"
+  ],
+  "focus_areas": [
+    "quality"
+  ],
+  "example_responses": {}
+}

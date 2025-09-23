@@ -120,8 +120,9 @@ def test_create_custom_persona(persona_manager):
         "example_responses": {}
     }
     
-    result = persona_manager.create_custom_persona(custom_data)
+    result = persona_manager.create_custom_persona("Test Persona", custom_data)
     assert result is True
+    # Check using the proper key format (lowercase with underscores)
     assert "test_persona" in persona_manager.available_personas
     
     # Test setting the custom persona
