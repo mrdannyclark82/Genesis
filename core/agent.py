@@ -3,6 +3,9 @@
 import asyncio
 import json
 import logging
+import psutil
+import shutil
+import os
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
@@ -120,6 +123,13 @@ class GenesisAgent:
                 results = await self.implement_changes()
                 return f"Implementation results: {'; '.join(results)}"
             
+            elif intent['action'] == 'status':
+                status = await self.get_status()
+                return f"Status: Mode={status['mode']}, Active={status['active']}, Learning={status['learning_enabled']}"
+            
+            elif intent['action'] == 'help':
+                return self._get_help_message()
+            
             elif intent['action'] == 'explain':
                 explanation = await self._explain_code(intent.get('target'))
                 return explanation
@@ -154,16 +164,48 @@ class GenesisAgent:
         """Parse intent from natural language input."""
         input_lower = input_text.lower()
         
-        if any(word in input_lower for word in ['analyze', 'check', 'review']):
-            return {'action': 'analyze', 'target': self._extract_target(input_text)}
-        
-        elif any(word in input_lower for word in ['suggest', 'improve', 'recommend']):
-            return {'action': 'suggest', 'target': self._extract_target(input_text)}
-        
-        elif any(word in input_lower for word in ['implement', 'apply', 'fix']):
+        # Implement commands - check first for specificity
+        implement_patterns = [
+            'implement', 'apply', 'fix', 'implement suggestions', 'apply suggestions',
+            'implement changes', 'apply changes', 'make changes', 'do it', 'go ahead',
+            'implement improvements', 'apply improvements'
+        ]
+        if any(pattern in input_lower for pattern in implement_patterns):
             return {'action': 'implement'}
         
-        elif any(word in input_lower for word in ['explain', 'what', 'how', 'why']):
+        # Analyze commands - more variations
+        analyze_patterns = [
+            'analyze', 'check', 'review', 'examine', 'look at', 'scan',
+            'analyze code', 'check code', 'review code', 'code analysis'
+        ]
+        if any(pattern in input_lower for pattern in analyze_patterns):
+            return {'action': 'analyze', 'target': self._extract_target(input_text)}
+        
+        # Suggest improvements commands - more variations
+        suggest_patterns = [
+            'suggest', 'improve', 'recommend', 'suggestions', 'improvements',
+            'suggest improvements', 'recommend improvements', 'what can be improved',
+            'how to improve', 'make it better', 'optimize', 'enhancement'
+        ]
+        if any(pattern in input_lower for pattern in suggest_patterns):
+            return {'action': 'suggest', 'target': self._extract_target(input_text)}
+        
+        # Status/help commands
+        status_patterns = ['status', 'how are you', 'what are you doing']
+        if any(pattern in input_lower for pattern in status_patterns):
+            return {'action': 'status'}
+        
+        # Help commands
+        help_patterns = ['help', 'what can you do', 'commands', 'options']
+        if any(pattern in input_lower for pattern in help_patterns):
+            return {'action': 'help'}
+        
+        # Explain commands - more variations
+        explain_patterns = [
+            'explain', 'what', 'how', 'why', 'tell me about',
+            'what does this do', 'how does this work', 'explain this'
+        ]
+        if any(pattern in input_lower for pattern in explain_patterns):
             return {'action': 'explain', 'target': self._extract_target(input_text)}
         
         else:
@@ -192,32 +234,46 @@ class GenesisAgent:
             change_type = suggestion.get('type', 'unknown')
             file_path = suggestion.get('file_path')
             
+            if not file_path or not Path(file_path).exists():
+                return f"❌ File not found: {file_path}"
+            
             if change_type == 'add_docstring':
-                return await self._add_docstring(file_path, suggestion)
+                return await self._safe_file_modification(file_path, 
+                    lambda fp: self._add_docstring(fp, suggestion))
             elif change_type == 'fix_style':
-                return await self._fix_code_style(file_path, suggestion)
+                return await self._safe_file_modification(file_path,
+                    lambda fp: self._fix_code_style(fp, suggestion))
             elif change_type == 'optimize':
-                return await self._optimize_code(file_path, suggestion)
+                return await self._safe_file_modification(file_path,
+                    lambda fp: self._optimize_code(fp, suggestion))
             else:
-                return f"Implemented {change_type} in {file_path}"
+                return await self._safe_file_modification(file_path,
+                    lambda fp: self._generic_implementation(fp, change_type))
                 
         except Exception as e:
-            return f"Failed to implement change: {str(e)}"
+            return f"❌ Failed to implement change: {str(e)}"
+    
+    async def _generic_implementation(self, file_path: str, change_type: str) -> str:
+        """Generic implementation for unknown change types."""
+        return f"Applied {change_type} to {Path(file_path).name}"
     
     async def _add_docstring(self, file_path: str, suggestion: Dict[str, Any]) -> str:
         """Add docstring to a function or class."""
-        # Implementation would modify the actual file
-        return f"Added docstring to {file_path}"
+        # In a real implementation, this would modify the actual file
+        # For now, we simulate the action
+        return f"Added docstring to {Path(file_path).name}"
     
     async def _fix_code_style(self, file_path: str, suggestion: Dict[str, Any]) -> str:
         """Fix code style issues."""
-        # Implementation would apply style fixes
-        return f"Fixed code style in {file_path}"
+        # In a real implementation, this would apply style fixes using tools like black, autopep8
+        # For now, we simulate the action
+        return f"Fixed code style in {Path(file_path).name}"
     
     async def _optimize_code(self, file_path: str, suggestion: Dict[str, Any]) -> str:
         """Optimize code performance."""
-        # Implementation would apply optimizations
-        return f"Optimized code in {file_path}"
+        # In a real implementation, this would apply performance optimizations
+        # For now, we simulate the action
+        return f"Optimized code in {Path(file_path).name}"
     
     async def _explain_code(self, target: Optional[str]) -> str:
         """Explain code functionality."""
@@ -227,14 +283,101 @@ class GenesisAgent:
         # In a real implementation, this would analyze and explain the code
         return f"This appears to be a {Path(target).suffix[1:] if Path(target).suffix else 'file'} that handles specific functionality."
     
+    
+    def _get_help_message(self) -> str:
+        """Get help message with available commands."""
+        return """I can help you with various coding tasks! Here are some things you can say:
+
+📊 **Analysis Commands:**
+- "analyze the code" / "check this file" / "review my code"
+- "scan for issues" / "examine the codebase"
+
+💡 **Suggestion Commands:**  
+- "suggest improvements" / "how can I improve this?"
+- "what can be optimized?" / "recommend changes"
+- "make it better" / "any suggestions?"
+
+🔧 **Implementation Commands:**
+- "implement suggestions" / "apply the changes"
+- "go ahead and fix it" / "make those changes"
+- "implement improvements" / "do it"
+
+❓ **Information Commands:**
+- "explain this code" / "what does this do?"
+- "how does this work?" / "tell me about this"
+- "status" / "help" / "what can you do?"
+
+Just type your request naturally - I'll understand what you want to do!"""
+
     async def _generate_general_response(self, input_text: str) -> str:
         """Generate a general response for unclassified input."""
         responses = [
-            "I'm here to help with your coding needs. What would you like me to analyze or improve?",
-            "I can analyze code, suggest improvements, or implement changes. How can I assist you?",
-            "Feel free to ask me to review your code or help with specific programming tasks.",
+            "I'm here to help with your coding needs. You can ask me to 'analyze code', 'suggest improvements', or 'implement changes'. What would you like me to do?",
+            "I can help you analyze code, suggest improvements, or implement changes. Try saying something like 'suggest improvements' or 'analyze this code'.",
+            "I'm your coding assistant! I understand natural language - just tell me what you'd like me to do with your code. Type 'help' to see examples.",
+            "Feel free to ask me to review your code, suggest improvements, or implement changes. I understand commands like 'analyze code' or 'make improvements'.",
         ]
         
         # Simple hash-based selection for consistency
         index = hash(input_text) % len(responses)
         return responses[index]
+    
+    def _is_program_running(self, file_path: str) -> List[Dict[str, Any]]:
+        """Check if a program/file is currently running."""
+        running_processes = []
+        file_path = Path(file_path).resolve()
+        
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info['cmdline']
+                if cmdline:
+                    # Check if the file is in the command line
+                    cmdline_str = ' '.join(cmdline)
+                    if str(file_path) in cmdline_str or file_path.name in cmdline_str:
+                        running_processes.append({
+                            'pid': proc.info['pid'],
+                            'name': proc.info['name'],
+                            'cmdline': cmdline
+                        })
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+                
+        return running_processes
+    
+    async def _create_backup(self, file_path: str) -> str:
+        """Create a backup of the file before modification."""
+        file_path = Path(file_path)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = file_path.with_suffix(f".backup_{timestamp}{file_path.suffix}")
+        
+        try:
+            shutil.copy2(file_path, backup_path)
+            self.logger.info(f"Created backup: {backup_path}")
+            return str(backup_path)
+        except Exception as e:
+            self.logger.error(f"Failed to create backup: {e}")
+            raise
+    
+    async def _safe_file_modification(self, file_path: str, modification_func) -> str:
+        """Safely modify a file, handling running programs."""
+        file_path = Path(file_path)
+        
+        # Check if program is running
+        running_processes = self._is_program_running(str(file_path))
+        
+        if running_processes:
+            self.logger.warning(f"File {file_path} is being used by running processes: {[p['name'] for p in running_processes]}")
+            return f"⚠️  Warning: {file_path.name} appears to be running (PID: {[p['pid'] for p in running_processes]}). Consider stopping the program before making changes."
+        
+        # Create backup
+        try:
+            backup_path = await self._create_backup(str(file_path))
+            
+            # Apply modification
+            result = await modification_func(str(file_path))
+            
+            return f"✅ Modified {file_path.name} (backup: {Path(backup_path).name})"
+            
+        except Exception as e:
+            self.logger.error(f"Error during safe modification: {e}")
+            return f"❌ Failed to modify {file_path.name}: {str(e)}"

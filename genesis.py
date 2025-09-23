@@ -129,6 +129,8 @@ async def run_interactive_session(agent: GenesisAgent):
         'quit': 'Exit the assistant'
     }
     
+    console.print("[dim]💡 Tip: You can use natural language! Try saying 'suggest improvements' or 'analyze the code'[/dim]")
+    
     while True:
         try:
             user_input = Prompt.ask("\n[bold cyan]Genesis>[/bold cyan]").strip()
@@ -138,12 +140,13 @@ async def run_interactive_session(agent: GenesisAgent):
                 
             command = user_input.lower()
             
-            if command == 'quit':
+            if command == 'quit' or command == 'exit':
                 break
             elif command == 'help':
                 console.print("\n[bold]Available Commands:[/bold]")
                 for cmd, desc in commands.items():
                     console.print(f"  [cyan]{cmd}[/cyan] - {desc}")
+                console.print("\n[dim]💡 You can also use natural language like 'suggest improvements' or 'implement changes'[/dim]")
             elif command == 'analyze':
                 await handle_analyze_command(agent)
             elif command == 'suggest':
@@ -155,15 +158,37 @@ async def run_interactive_session(agent: GenesisAgent):
             elif command == 'learn':
                 await handle_learn_command(agent)
             else:
-                # Treat as natural language input
-                response = await agent.process_natural_language(user_input)
-                console.print(f"\n[green]Genesis:[/green] {response}")
+                # Handle natural language input - check if it's an actionable command
+                await handle_natural_language_input(agent, user_input)
                 
         except KeyboardInterrupt:
             break
         except Exception as e:
             logger.error(f"Error in interactive session: {e}")
             console.print(f"[red]Error: {e}[/red]")
+
+
+async def handle_natural_language_input(agent: GenesisAgent, user_input: str):
+    """Handle natural language input and route to appropriate handlers."""
+    from core.agent import GenesisAgent
+    
+    # Parse the intent to see if we should execute a command directly
+    intent = await agent._parse_intent(user_input)
+    
+    if intent['action'] == 'analyze':
+        await handle_analyze_command(agent)
+    elif intent['action'] == 'suggest':
+        await handle_suggest_command(agent)
+    elif intent['action'] == 'implement':
+        await handle_implement_command(agent)
+    elif intent['action'] == 'status':
+        await handle_status_command(agent)
+    elif intent['action'] == 'help':
+        console.print(agent._get_help_message())
+    else:
+        # For other intents, use the natural language processor
+        response = await agent.process_natural_language(user_input)
+        console.print(f"\n[green]Genesis:[/green] {response}")
 
 
 async def handle_analyze_command(agent):
@@ -178,8 +203,34 @@ async def handle_suggest_command(agent):
     """Handle the suggest command."""
     console.print("[blue]Generating improvement suggestions...[/blue]")
     suggestions = await agent.suggest_improvements()
+    
+    if not suggestions or (len(suggestions) == 1 and "Error" in suggestions[0]):
+        console.print("[yellow]No suggestions available or an error occurred.[/yellow]")
+        return
+    
+    console.print("\n[bold]💡 Improvement Suggestions:[/bold]")
     for i, suggestion in enumerate(suggestions, 1):
         console.print(f"{i}. {suggestion}")
+    
+    # Ask if user wants to implement the suggestions
+    console.print("\n")
+    apply_suggestions = Prompt.ask(
+        "[bold cyan]Would you like me to apply these suggestions?[/bold cyan]", 
+        choices=['y', 'yes', 'n', 'no'], 
+        default='n'
+    )
+    
+    if apply_suggestions.lower() in ['y', 'yes']:
+        console.print("[blue]Implementing suggested changes...[/blue]")
+        results = await agent.implement_changes()
+        if results:
+            console.print("\n[bold]✅ Implementation Results:[/bold]")
+            for result in results:
+                console.print(f"  • {result}")
+        else:
+            console.print("[yellow]No changes were implemented.[/yellow]")
+    else:
+        console.print("[dim]You can run '[cyan]implement[/cyan]' later to apply these suggestions.[/dim]")
 
 
 async def handle_implement_command(agent):
