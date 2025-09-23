@@ -121,8 +121,9 @@ def implement_changes(ctx, auto_approve):
 
 @cli.command()
 @click.argument('project_path', default='.')
+@click.option('--interactive', is_flag=True, help='Enable interactive selection of features')
 @click.pass_context
-def suggest_features(ctx, project_path):
+def suggest_features(ctx, project_path, interactive):
     """Suggest new features and add-ons for the project."""
     console.print(f"[blue]Suggesting new features for: {project_path}[/blue]")
     
@@ -130,13 +131,58 @@ def suggest_features(ctx, project_path):
         agent = GenesisAgent()
         features = asyncio.run(agent.suggest_new_features(project_path))
         
+        if not features or (len(features) == 1 and "Error" in str(features[0])):
+            console.print("[yellow]No feature suggestions available or an error occurred.[/yellow]")
+            if "GITHUB_TOKEN" in str(features[0]) if features else False:
+                console.print("[dim]Note: Some features require GITHUB_TOKEN for enhanced suggestions[/dim]")
+            return
+        
         console.print("\n[bold]🚀 New Feature Suggestions:[/bold]")
-        for feature in features:
-            console.print(f"  {feature}")
+        numbered_features = []
+        for i, feature in enumerate(features, 1):
+            console.print(f"  [cyan]{i}.[/cyan] {feature}")
+            numbered_features.append((i, feature))
+        
+        if interactive and numbered_features:
+            console.print("\n[dim]You can select features to implement by number (e.g., '1,3,5' or 'all')[/dim]")
+            selection = Prompt.ask(
+                "[bold cyan]Select features to implement (or 'none' to skip)[/bold cyan]",
+                default="none"
+            )
+            
+            if selection.lower() not in ['none', 'skip', '']:
+                selected_indices = []
+                if selection.lower() == 'all':
+                    selected_indices = list(range(1, len(numbered_features) + 1))
+                else:
+                    try:
+                        selected_indices = [int(x.strip()) for x in selection.split(',')]
+                    except ValueError:
+                        console.print("[red]Invalid selection format. Use numbers separated by commas.[/red]")
+                        return
+                
+                # Validate indices
+                valid_indices = [i for i in selected_indices if 1 <= i <= len(numbered_features)]
+                if valid_indices:
+                    console.print(f"\n[blue]Selected features: {', '.join(map(str, valid_indices))}[/blue]")
+                    for idx in valid_indices:
+                        feature = numbered_features[idx-1][1]
+                        console.print(f"[green]Would implement:[/green] {feature}")
+                    
+                    confirm = Confirm.ask("\nProceed with implementation?", default=False)
+                    if confirm:
+                        console.print("[blue]Implementation would begin here...[/blue]")
+                        console.print("[yellow]Note: Feature implementation is a placeholder for now[/yellow]")
+                else:
+                    console.print("[red]No valid feature numbers selected.[/red]")
+        elif not interactive:
+            console.print("\n[dim]Use --interactive to select and implement features by number[/dim]")
             
     except Exception as e:
         logger.error(f"Error suggesting features: {e}")
         console.print(f"[red]Error: {e}[/red]")
+        if "GITHUB_TOKEN" in str(e):
+            console.print("[dim]Tip: Set GITHUB_TOKEN environment variable for enhanced suggestions[/dim]")
 
 
 @cli.command()
@@ -355,11 +401,31 @@ def create_persona(ctx, interactive):
         if interactive:
             # Guided persona creation
             console.print("\n[bold blue]🎭 Creating New Persona[/bold blue]")
+            console.print("[dim]Let's create a custom AI persona tailored to your needs![/dim]")
             
-            name = Prompt.ask("[cyan]Persona name[/cyan]")
-            description = Prompt.ask("[cyan]Description[/cyan]")
+            # Show examples for inspiration
+            console.print("\n[bold]💡 Examples of personas you might create:[/bold]")
+            examples = [
+                "Frontend Developer - Specializes in React, CSS, and UX design",
+                "Security Expert - Focuses on security vulnerabilities and best practices", 
+                "Performance Optimizer - Emphasizes speed, efficiency, and scalability",
+                "DevOps Engineer - Concentrates on deployment, CI/CD, and infrastructure",
+                "Junior Mentor - Patient and educational approach for learning"
+            ]
+            for example in examples:
+                console.print(f"  [dim]• {example}[/dim]")
             
-            console.print("\n[dim]Enter expertise areas (one per line, empty line to finish):[/dim]")
+            console.print("\n" + "="*60)
+            
+            name = Prompt.ask("[cyan]What would you like to name your persona?[/cyan]")
+            
+            description = Prompt.ask(
+                "[cyan]Briefly describe this persona (what they specialize in)[/cyan]",
+                default=f"A specialized AI assistant focused on {name.lower()}"
+            )
+            
+            console.print(f"\n[dim]📚 Enter expertise areas for {name} (one per line, empty line to finish):[/dim]")
+            console.print("[dim]Examples: python, web development, testing, security, etc.[/dim]")
             expertise_areas = []
             while True:
                 area = input("  > ").strip()
@@ -367,11 +433,26 @@ def create_persona(ctx, interactive):
                     break
                 expertise_areas.append(area)
             
+            if not expertise_areas:
+                expertise_areas = ["general programming", "code analysis"]
+                console.print("[dim]No expertise areas provided, using defaults[/dim]")
+            
             communication_style = Prompt.ask(
                 "[cyan]Communication style[/cyan]",
                 choices=["professional", "casual", "technical", "encouraging", "formal"],
                 default="professional"
             )
+            
+            # Show preview
+            console.print(f"\n[bold]📋 Persona Preview:[/bold]")
+            console.print(f"[cyan]Name:[/cyan] {name}")
+            console.print(f"[cyan]Description:[/cyan] {description}")
+            console.print(f"[cyan]Expertise:[/cyan] {', '.join(expertise_areas)}")
+            console.print(f"[cyan]Style:[/cyan] {communication_style}")
+            
+            if not Confirm.ask("\nCreate this persona?", default=True):
+                console.print("[yellow]Persona creation cancelled[/yellow]")
+                return
             
             # Create the persona
             persona_data = {
@@ -385,10 +466,12 @@ def create_persona(ctx, interactive):
             success = persona_manager.create_custom_persona(name, persona_data)
             if success:
                 console.print(f"[green]✅ Created persona: {name}[/green]")
+                console.print(f"[dim]💡 Use 'python genesis.py persona {name}' to activate it[/dim]")
             else:
                 console.print(f"[red]❌ Failed to create persona[/red]")
         else:
             console.print("[yellow]Use --interactive for guided persona creation[/yellow]")
+            console.print("[dim]Example: python genesis.py create-persona --interactive[/dim]")
             
     except Exception as e:
         logger.error(f"Error creating persona: {e}")
@@ -666,13 +749,50 @@ async def handle_features_command(agent):
     console.print("[blue]Generating new feature suggestions...[/blue]")
     features = await agent.suggest_new_features()
     
-    if not features or (len(features) == 1 and "Error" in features[0]):
+    if not features or (len(features) == 1 and "Error" in str(features[0])):
         console.print("[yellow]No feature suggestions available or an error occurred.[/yellow]")
+        if features and "GITHUB_TOKEN" in str(features[0]):
+            console.print("[dim]Note: Some features require GITHUB_TOKEN for enhanced suggestions[/dim]")
         return
     
     console.print("\n[bold]🚀 New Feature Suggestions:[/bold]")
-    for feature in features:
-        console.print(f"  {feature}")
+    numbered_features = []
+    for i, feature in enumerate(features, 1):
+        console.print(f"  [cyan]{i}.[/cyan] {feature}")
+        numbered_features.append((i, feature))
+    
+    if numbered_features:
+        console.print("\n[dim]💡 Tip: You can select features by number (e.g., '1,3,5' or 'all')[/dim]")
+        selection = Prompt.ask(
+            "[bold cyan]Select features to implement (or 'none' to skip)[/bold cyan]",
+            default="none"
+        )
+        
+        if selection.lower() not in ['none', 'skip', '']:
+            selected_indices = []
+            if selection.lower() == 'all':
+                selected_indices = list(range(1, len(numbered_features) + 1))
+            else:
+                try:
+                    selected_indices = [int(x.strip()) for x in selection.split(',')]
+                except ValueError:
+                    console.print("[red]Invalid selection format. Use numbers separated by commas.[/red]")
+                    return
+            
+            # Validate indices
+            valid_indices = [i for i in selected_indices if 1 <= i <= len(numbered_features)]
+            if valid_indices:
+                console.print(f"\n[blue]Selected features: {', '.join(map(str, valid_indices))}[/blue]")
+                for idx in valid_indices:
+                    feature = numbered_features[idx-1][1]
+                    console.print(f"[green]Would implement:[/green] {feature}")
+                
+                confirm = Confirm.ask("\nProceed with implementation?", default=False)
+                if confirm:
+                    console.print("[blue]Implementation would begin here...[/blue]")
+                    console.print("[yellow]Note: Feature implementation is a placeholder for now[/yellow]")
+            else:
+                console.print("[red]No valid feature numbers selected.[/red]")
 
 
 async def handle_search_command(agent):
