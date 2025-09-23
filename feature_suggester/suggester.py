@@ -54,26 +54,52 @@ class FeatureSuggester:
             # Generate feature suggestions based on analysis
             suggestions = []
             
-            # Rule-based suggestions
+            # Rule-based suggestions (always available)
             rule_based = await self._generate_rule_based_suggestions(project_info)
             suggestions.extend(rule_based)
             
-            # Template-based suggestions
+            # Template-based suggestions (always available)
             template_based = await self._generate_template_based_suggestions(project_info)
             suggestions.extend(template_based)
             
-            # External search-based suggestions
-            search_based = await self._generate_search_based_suggestions(project_info)
-            suggestions.extend(search_based)
+            # External search-based suggestions (may fail without tokens)
+            try:
+                search_based = await self._generate_search_based_suggestions(project_info)
+                if search_based:  # Only add if we got actual suggestions
+                    suggestions.extend(search_based)
+                else:
+                    # If search didn't return suggestions, add fallback
+                    self.logger.info("No search-based suggestions found, using fallback")
+                    fallback_suggestions = self._get_fallback_suggestions(project_info)
+                    suggestions.extend(fallback_suggestions)
+            except Exception as search_error:
+                self.logger.warning(f"External search unavailable: {search_error}")
+                # Add fallback generic suggestions
+                fallback_suggestions = self._get_fallback_suggestions(project_info)
+                suggestions.extend(fallback_suggestions)
+            
+            # If we still don't have enough suggestions, add more fallbacks
+            if len(suggestions) < 5:
+                additional_fallbacks = self._get_additional_fallback_suggestions(project_info)
+                suggestions.extend(additional_fallbacks)
+            
+            # Remove duplicates by name
+            seen_names = set()
+            unique_suggestions = []
+            for suggestion in suggestions:
+                if suggestion.name not in seen_names:
+                    unique_suggestions.append(suggestion)
+                    seen_names.add(suggestion.name)
             
             # Sort by priority and confidence
-            suggestions.sort(key=lambda x: (self._priority_score(x.priority), x.confidence), reverse=True)
+            unique_suggestions.sort(key=lambda x: (self._priority_score(x.priority), x.confidence), reverse=True)
             
-            return suggestions[:15]  # Return top 15 suggestions
+            return unique_suggestions[:15]  # Return top 15 suggestions
             
         except Exception as e:
             self.logger.error(f"Error suggesting features: {e}")
-            return []
+            # Last resort fallback
+            return self._get_basic_fallback_suggestions()
     
     async def suggest_features_by_category(self, category: str, project_path: str = ".") -> List[FeatureSuggestion]:
         """Suggest features for a specific category."""
@@ -645,3 +671,172 @@ class FeatureSuggester:
     def _priority_score(self, priority: str) -> int:
         """Convert priority string to numeric score for sorting."""
         return {'high': 3, 'medium': 2, 'low': 1}.get(priority, 2)
+    
+    def _get_fallback_suggestions(self, project_info: Dict[str, Any]) -> List[FeatureSuggestion]:
+        """Get fallback suggestions when external search is not available."""
+        fallback_suggestions = []
+        
+        # Common suggestions that apply to most projects
+        common_features = [
+            {
+                'name': 'Configuration Management',
+                'description': 'Centralized configuration system with environment support',
+                'category': 'infrastructure',
+                'steps': ['Create config module', 'Add .env support', 'Implement validation'],
+                'files': ['config.py', '.env.example'],
+                'deps': ['python-dotenv']
+            },
+            {
+                'name': 'Logging System',
+                'description': 'Structured logging with multiple output formats',
+                'category': 'monitoring',
+                'steps': ['Set up logger', 'Add formatters', 'Configure handlers'],
+                'files': ['logging_config.py'],
+                'deps': ['structlog']
+            },
+            {
+                'name': 'Error Handling',
+                'description': 'Comprehensive error handling and user-friendly error messages',
+                'category': 'reliability',
+                'steps': ['Create error classes', 'Add error handlers', 'Implement recovery'],
+                'files': ['errors.py'],
+                'deps': []
+            },
+            {
+                'name': 'Input Validation',
+                'description': 'Comprehensive input validation and sanitization system',
+                'category': 'security',
+                'steps': ['Add validation library', 'Create validation schemas', 'Implement sanitization'],
+                'files': ['validation.py'],
+                'deps': ['pydantic']
+            },
+            {
+                'name': 'Authentication System',
+                'description': 'User authentication with secure password handling',
+                'category': 'security',
+                'steps': ['Set up auth framework', 'Add password hashing', 'Implement sessions'],
+                'files': ['auth.py', 'models/user.py'],
+                'deps': ['bcrypt', 'jwt']
+            },
+            {
+                'name': 'API Rate Limiting',
+                'description': 'Protect APIs from abuse with rate limiting',
+                'category': 'security',
+                'steps': ['Install rate limiter', 'Configure limits', 'Add monitoring'],
+                'files': ['middleware/rate_limit.py'],
+                'deps': ['slowapi']
+            }
+        ]
+        
+        for feature in common_features:
+            suggestion = FeatureSuggestion(
+                name=feature['name'],
+                description=feature['description'],
+                category=feature['category'],
+                implementation_steps=feature['steps'],
+                files_to_create=feature['files'],
+                files_to_modify=[],
+                dependencies=feature['deps'],
+                examples=[],
+                priority="medium",
+                confidence=0.7,
+                estimated_effort="medium"
+            )
+            fallback_suggestions.append(suggestion)
+        
+        return fallback_suggestions
+    
+    def _get_additional_fallback_suggestions(self, project_info: Dict[str, Any]) -> List[FeatureSuggestion]:
+        """Get additional fallback suggestions based on project type."""
+        suggestions = []
+        
+        if project_info.get('has_web_framework'):
+            suggestions.append(FeatureSuggestion(
+                name="Health Check Endpoint",
+                description="Add health monitoring endpoint for service status",
+                category="monitoring",
+                implementation_steps=["Create health endpoint", "Add system checks", "Include dependency status"],
+                files_to_create=["health.py"],
+                files_to_modify=["main.py"],
+                dependencies=[],
+                examples=[],
+                priority="medium",
+                confidence=0.8,
+                estimated_effort="small"
+            ))
+        
+        if project_info.get('has_database'):
+            suggestions.append(FeatureSuggestion(
+                name="Database Migration System",
+                description="Automated database schema migration management",
+                category="database",
+                implementation_steps=["Set up migration framework", "Create initial migration", "Add migration commands"],
+                files_to_create=["migrations/"],
+                files_to_modify=[],
+                dependencies=["alembic"],
+                examples=[],
+                priority="high",
+                confidence=0.9,
+                estimated_effort="medium"
+            ))
+        
+        if not project_info.get('has_tests'):
+            suggestions.append(FeatureSuggestion(
+                name="Testing Framework Setup",
+                description="Complete testing framework with unit and integration tests",
+                category="testing",
+                implementation_steps=["Install testing framework", "Create test structure", "Add sample tests"],
+                files_to_create=["tests/", "conftest.py"],
+                files_to_modify=[],
+                dependencies=["pytest", "pytest-cov"],
+                examples=[],
+                priority="high",
+                confidence=0.95,
+                estimated_effort="medium"
+            ))
+        
+        return suggestions
+    
+    def _get_basic_fallback_suggestions(self) -> List[FeatureSuggestion]:
+        """Get basic fallback suggestions when everything else fails."""
+        return [
+            FeatureSuggestion(
+                name="Documentation System",
+                description="Automated documentation generation and maintenance",
+                category="documentation",
+                implementation_steps=["Set up doc generator", "Create doc templates", "Add API docs"],
+                files_to_create=["docs/", "README.md"],
+                files_to_modify=[],
+                dependencies=["sphinx"],
+                examples=[],
+                priority="medium",
+                confidence=0.8,
+                estimated_effort="medium"
+            ),
+            FeatureSuggestion(
+                name="Code Quality Tools",
+                description="Automated code formatting, linting, and quality checks",
+                category="development",
+                implementation_steps=["Add linter config", "Set up formatter", "Create pre-commit hooks"],
+                files_to_create=[".pre-commit-config.yaml", "pyproject.toml"],
+                files_to_modify=[],
+                dependencies=["black", "flake8", "pre-commit"],
+                examples=[],
+                priority="medium",
+                confidence=0.9,
+                estimated_effort="small"
+            ),
+            FeatureSuggestion(
+                name="Performance Monitoring",
+                description="Application performance monitoring and profiling",
+                category="performance",
+                implementation_steps=["Add profiling middleware", "Set up metrics collection", "Create dashboards"],
+                files_to_create=["monitoring.py"],
+                files_to_modify=[],
+                dependencies=["psutil"],
+                examples=[],
+                priority="low",
+                confidence=0.7,
+                estimated_effort="medium"
+            )
+        ]

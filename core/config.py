@@ -63,8 +63,11 @@ class Config:
     
     def validate(self) -> None:
         """Validate the configuration."""
+        # Make GitHub token optional - warn instead of error
         if not self.github_token:
-            raise ValueError("GITHUB_TOKEN is required")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("GITHUB_TOKEN not set - some features may have limited functionality")
         
         # Create data directories if they don't exist
         feedback_dir = Path(self.feedback_storage_path).parent
