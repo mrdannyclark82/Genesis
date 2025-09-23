@@ -1,0 +1,21 @@
+{
+  "name": "User Authentication System",
+  "description": "Complete user authentication system with login, registration, and session management",
+  "category": "authentication",
+  "version": "1.0.0",
+  "requirements": [
+    "flask-login>=0.6.0",
+    "werkzeug>=2.0.0",
+    "bcrypt>=3.2.0"
+  ],
+  "dependencies": [
+    "User model database integration",
+    "Session management middleware"
+  ],
+  "post_install_steps": [
+    "Configure database models",
+    "Set up authentication routes",
+    "Configure session secret key",
+    "Run database migrations"
+  ]
+}

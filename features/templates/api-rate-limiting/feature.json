@@ -1,0 +1,20 @@
+{
+  "name": "API Rate Limiting",
+  "description": "Implement rate limiting to prevent API abuse and improve security",
+  "category": "security",
+  "version": "1.0.0",
+  "requirements": [
+    "flask-limiter>=3.0.0",
+    "redis>=4.5.0"
+  ],
+  "dependencies": [
+    "Redis server for rate limit storage",
+    "Rate limiting middleware integration"
+  ],
+  "post_install_steps": [
+    "Configure Redis connection",
+    "Set rate limiting rules per endpoint",
+    "Configure rate limit response messages",
+    "Test rate limiting functionality"
+  ]
+}
