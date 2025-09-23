@@ -70,7 +70,8 @@ def test_feature_suggestion_dataclass():
         implementation_steps=["Step 1", "Step 2"],
         files_to_create=["test.py"],
         files_to_modify=["main.py"],
-        dependencies=["pytest"]
+        dependencies=["pytest"],
+        examples=[]
     )
     
     assert suggestion.name == "Test Feature"
