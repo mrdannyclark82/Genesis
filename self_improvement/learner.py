@@ -402,10 +402,15 @@ class SelfLearner:
         words = re.findall(r'\b\w+\b', feedback.lower())
         
         # Filter common words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'this', 'that', 'these', 'those'}
-        
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+            'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'this', 'that',
+            'these', 'those'
+        }
+
         keywords = [word for word in words if word not in stop_words and len(word) > 3]
-        
+
         return list(set(keywords))
     
     def _is_recent(self, timestamp: str, days: int = 7) -> bool:

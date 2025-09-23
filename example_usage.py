@@ -23,9 +23,12 @@ async def demo_code_analysis():
 # Example Python file with some issues
 
 def function_without_docstring(x, y):
-    # TODO: Add proper error handling
-    result = x + y
-    console.log("This is wrong - not JavaScript!")  # Wrong language
+    try:
+        result = x + y
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return None
+    # console.log("This is wrong - not JavaScript!")  # Wrong language
     return result
 
 class MyClass:

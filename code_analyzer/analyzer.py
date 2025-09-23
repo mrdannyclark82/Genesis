@@ -293,15 +293,19 @@ class CodeAnalyzer:
                     confidence=0.9
                 ))
             
-            # TODO comments
+            # TODO/FIXME comments
             if 'TODO' in line.upper() or 'FIXME' in line.upper():
+                # Extract the actual TODO/FIXME comment for better reporting
+                import re
+                match = re.search(r'#\s*(TODO|FIXME)[:\-]?\s*(.*)', line, re.IGNORECASE)
+                todo_text = match.group(2).strip() if match else ''
                 issues.append(CodeIssue(
                     file_path=file_path,
                     line_number=i,
                     issue_type='maintenance',
                     severity='medium',
-                    message='TODO/FIXME comment found',
-                    suggestion='Address this TODO item or convert to proper issue tracking',
+                    message=f'TODO/FIXME comment found: {todo_text}',
+                    suggestion='Create a GitHub issue or address this TODO directly in code.',
                     confidence=0.7
                 ))
         
