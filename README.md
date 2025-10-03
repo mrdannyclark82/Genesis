@@ -13,7 +13,9 @@ A fully functional self-improving AI virtual assistant coding agent that can int
 - **Persona System**: Switch between different AI personas for varied interaction styles
 - **External Search**: Search GitHub, Stack Overflow, and other sources for code examples
 
-## Installation
+## Quick Start
+
+See [QUICKSTART_LLM.md](QUICKSTART_LLM.md) for a 3-step guide to enable AI-powered features with nvidia/nemotron-nano-9b-v2:free.
 
 ```bash
 # Clone the repository
@@ -63,10 +65,18 @@ The default model `nvidia/nemotron-nano-9b-v2:free` is free to use through OpenR
 
 - `genesis.py`: Main entry point and CLI interface
 - `core/`: Core AI agent functionality
+- `llm/`: LLM client for AI model integration
 - `github_api/`: GitHub API integration
 - `code_analyzer/`: Code analysis and suggestion engine
 - `self_improvement/`: Learning and improvement mechanisms
 - `utils/`: Utility functions and helpers
+
+## Documentation
+
+- [Quick Start Guide](QUICKSTART_LLM.md) - 3-step setup for LLM features
+- [LLM Integration Guide](LLM_INTEGRATION.md) - Comprehensive LLM documentation
+- [Feature Installation Guide](FEATURE_INSTALLATION_GUIDE.md) - Installing additional features
+- [Enhanced Features](ENHANCED_FEATURES.md) - Advanced capabilities
 
 ## License
 
