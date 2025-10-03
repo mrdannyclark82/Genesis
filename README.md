@@ -7,8 +7,11 @@ A fully functional self-improving AI virtual assistant coding agent that can int
 - **GitHub Integration**: Full interaction with GitHub repositories, issues, pull requests, and workflows
 - **Code Analysis**: Analyze existing code and suggest improvements
 - **Code Generation**: Create new code based on requirements and patterns
+- **AI-Powered Responses**: Uses nvidia/nemotron-nano-9b-v2:free LLM for intelligent, context-aware assistance
 - **Self-Improvement**: Learn from interactions and improve suggestions over time
 - **Interactive Interface**: Command-line interface with text input and feedback loops
+- **Persona System**: Switch between different AI personas for varied interaction styles
+- **External Search**: Search GitHub, Stack Overflow, and other sources for code examples
 
 ## Installation
 
@@ -42,8 +45,19 @@ python genesis.py --implement-changes
 Copy `.env.example` to `.env` and configure:
 
 - `GITHUB_TOKEN`: Your GitHub personal access token
-- `OPENAI_API_KEY`: OpenAI API key for AI capabilities (optional)
+- `OPENROUTER_API_KEY`: OpenRouter API key for AI capabilities (required for LLM features)
+- `LLM_MODEL`: AI model to use (default: nvidia/nemotron-nano-9b-v2:free)
+- `OPENAI_API_KEY`: OpenAI API key (optional, legacy support)
 - `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR)
+
+### Getting an OpenRouter API Key
+
+1. Visit [OpenRouter.ai](https://openrouter.ai/)
+2. Sign up for a free account
+3. Get your API key from the dashboard
+4. Add it to your `.env` file as `OPENROUTER_API_KEY`
+
+The default model `nvidia/nemotron-nano-9b-v2:free` is free to use through OpenRouter.
 
 ## Architecture
 
