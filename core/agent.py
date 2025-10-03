@@ -17,6 +17,7 @@ from self_improvement.learner import SelfLearner
 from feature_suggester.suggester import FeatureSuggester
 from external_search.search_client import ExternalSearchClient
 from personas.persona_manager import PersonaManager
+from llm.client import LLMClient
 from utils.logger import get_logger
 
 
@@ -35,6 +36,7 @@ class GenesisAgent:
         self.feature_suggester = FeatureSuggester(self.config)
         self.search_client = ExternalSearchClient(self.config)
         self.persona_manager = PersonaManager(self.config)
+        self.llm_client = LLMClient(self.config)
         
         self._active = True
         self._mode = "interactive"
@@ -512,7 +514,15 @@ class GenesisAgent:
 Just type your request naturally - I'll understand what you want to do!"""
 
     async def _generate_general_response(self, input_text: str) -> str:
-        """Generate a general response for unclassified input."""
+        """Generate a general response for unclassified input using LLM."""
+        # Try to use LLM for intelligent response
+        async with self.llm_client:
+            response = await self.llm_client.answer_question(input_text)
+            
+            if response:
+                return response
+        
+        # Fallback to predefined responses if LLM is not available
         responses = [
             "I'm here to help with your coding needs. You can ask me to 'analyze code', 'suggest improvements', or 'implement changes'. What would you like me to do?",
             "I can help you analyze code, suggest improvements, or implement changes. Try saying something like 'suggest improvements' or 'analyze this code'.",

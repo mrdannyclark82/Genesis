@@ -18,6 +18,8 @@ class Config:
     # AI API Configuration
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
+    llm_model: str = "nvidia/nemotron-nano-9b-v2:free"
     
     # Application Settings
     log_level: str = "INFO"
@@ -50,6 +52,8 @@ class Config:
             github_repo_name=os.getenv('GITHUB_REPO_NAME'),
             openai_api_key=os.getenv('OPENAI_API_KEY'),
             anthropic_api_key=os.getenv('ANTHROPIC_API_KEY'),
+            openrouter_api_key=os.getenv('OPENROUTER_API_KEY'),
+            llm_model=os.getenv('LLM_MODEL', 'nvidia/nemotron-nano-9b-v2:free'),
             log_level=os.getenv('LOG_LEVEL', 'INFO'),
             debug=os.getenv('DEBUG', 'False').lower() == 'true',
             learning_enabled=os.getenv('LEARNING_ENABLED', 'True').lower() == 'true',
